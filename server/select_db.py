@@ -29,6 +29,7 @@ if __name__ == '__main__':
     EYESEA_DB_PATH = content["database_storage"]
 
     os.system("taskkill /FI \"WindowTitle eq Front-End Server - ..\\uclient\\start_client.bat\" /T /F")
+    os.system("taskkill /FI \"WindowTitle eq Back-End Server\" /T /F")
     os.system("start /min \"Front-End Server\" ..\\uclient\\start_client.bat")
 
     while True:
@@ -66,12 +67,15 @@ if __name__ == '__main__':
             with open(json_path, "w") as f:
                 f.write(json.dumps(content, indent=4))
 
-            kill_process(8080)
+            # kill_process(8080)
+            os.system("taskkill /FI \"WindowTitle eq Back-End Server\" /T /F")
+
             os.system("start /min \"Back-End Server\" python eyesea_server.py")
-            os.system("start https://localhost:7890")
+            os.system("start http://localhost:7890")
         else:
             continue
 
     print("Killing")
     os.system("taskkill /FI \"WindowTitle eq Front-End Server - ..\\uclient\\start_client.bat\" /T /F")
-    kill_process(8080)
+    os.system("taskkill /FI \"WindowTitle eq Back-End Server\" /T /F")
+    # kill_process(8080)

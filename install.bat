@@ -1,3 +1,6 @@
+@setlocal enableextensions
+@cd /d "%~dp0"
+
 cd uclient
 call conda env create -f env-eyesea-client.yml
 call conda activate eyesea-client
