@@ -13,6 +13,7 @@ dependencies:
   - pip
   - scipy
   - opencv=3
+  - gevent
   - pip:
     - ffmpeg-python
     - configargparse

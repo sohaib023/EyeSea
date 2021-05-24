@@ -1,10 +1,10 @@
 {
-  "cache": "$HOME/thumbnails",
-  "temporary_storage": "$HOME/EyeSea/server/.tmp",
-  "video_storage": "$HOME/videos",
-  "database_storage": "$HOME/databases",
-  "algorithms": "$HOME/EyeSea/algorithms",
-  "database": "eyesea.db",
-  "video_format": "mp4",
-  "ffmpeg_vcodec": "libx264"
+    "cache": "..\\thumbnails",
+    "temporary_storage": "..\\server\\.tmp",
+    "video_storage": "..\\videos",
+    "database_storage": "..\\databases",
+    "algorithms": "..\\algorithms",
+    "database": "stereovision-2020_05_05.db",
+    "video_format": "mp4",
+    "ffmpeg_vcodec": "libx264"
 }

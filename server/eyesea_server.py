@@ -5,6 +5,7 @@ Copyright 2018 Battelle Memorial Institute. All rights reserved.
 from __future__ import division  # divide array by scalar, don't floor result
 
 import cgi
+import gevent.monkey; gevent.monkey.patch_all()
 import bottle
 import json
 import os
@@ -16,6 +17,7 @@ import hashlib
 import sys
 import zipfile
 import math
+import traceback
 
 import numpy as np
 from numpy import inf
@@ -121,11 +123,14 @@ def get_or_update_analysis(a):
         p = task['p'].poll()
         if p is not None:
             data = {'status': 'FINISHED', 'results': ''}
+            # import pdb; pdb.set_trace()
             if p:
                 data['status'] = 'FAILED'
                 task['error'].flush()
                 os.fsync(task['error'].fileno())
+                task['error'].seek(0)
                 data['results'] = task['error'].read()
+                print(data['results'])
             else:
                 with open(task['output']) as f:
                     results = json.loads(f.read())['frames']
@@ -182,7 +187,7 @@ def get_video_path_parts(vid):
     slash = uri.rfind(os.sep)
     if slash < 0 and uri[0] == '/':
         slash = uri.rfind('/')
-    pathname = uri[slash + 1:] if is_file_scheme else uri
+    pathname = uri[slash + 1:] if is_file_scheme else uri[slash + 1:]
     filename = os.path.splitext(pathname)[0]
     root = uri[:slash] if is_file_scheme else videostore
     return (pathname, filename, root)
@@ -225,24 +230,32 @@ def queue_analysis(index, vid, method, procargs=None):
         slug = '{p}/{f}-{v}-{i}-{m}'.format(p=tmp, f=filename,
                                             v=vid['vid'], i=index, m=method['mid'])
         output = slug + '.json'
-        args = ['python', script, input, output]
+        args = ['python', script, input, output, '--verbose']
         args.extend(np.array([[k, v] for k, v in procargs.items()]).flatten())
         aid = analysis.select().where(analysis.aid == analysis.insert(
             {'mid': method['mid'], 'vid': vid['vid'], 'status': 'QUEUED', 'parameters': json.dumps(procargs), 'results': ''}).execute()).dicts().get()
         stderr = open(slug + '.err', 'w+')
         # Python on Windows hates u'' strings apparently; This should go away with a switch to Python 3.x
         local_env = {str(key): str(value)
-                     for key, value in eye_env.iteritems()}
+                     for key, value in os.environ.items()}
+        local_env['PATH'] += os.pathsep + (method['path'] if method['path'] else abs_algorithm_path)
         tasklist[aid['aid']] = {'p': Popen(
             args, env=local_env, stderr=stderr), 'output': output, 'error': stderr}
         analysis.update({'status': 'PROCESSING'}).where(
             analysis.aid == aid['aid']).execute()
         return analysis.select().where(analysis.aid == aid['aid']).dicts().get()
-    except:
+    except Exception as e:
+        print(exception_to_string(e))
         print("Unexpected error:", sys.exc_info()[0])
         if aid:
             analysis.update({'status': 'FAILED'}).where(
                 analysis.aid == aid['aid']).execute()
+
+
+def exception_to_string(excp):
+   stack = traceback.extract_stack()[:-3] + traceback.extract_tb(excp.__traceback__)  # add limit=?? 
+   pretty = traceback.format_list(stack)
+   return ''.join(pretty) + '\n  {} {}'.format(excp.__class__,excp)
 
 # Should be similar to what subprocess.checkout_output does, except it handles stderr
 def check_output_with_error(*pargs, **args):
@@ -364,7 +377,7 @@ def get_datasets():
         name, ext = os.path.splitext(files[j])
         if ext == '.db':
             data.append({'label' : name, 'value' : j})
-    print(json.dumps(data))
+    # print(json.dumps(data))
     #data = {'datasets' : dataset_names}
     #return json.dumps(data)
     return json.dumps(data)
@@ -770,7 +783,7 @@ def process_video():
     results = []
     for i, a in enumerate(analyses):
         results.append(queue_analysis(i, vid, a['mid'], a))
-    print(results)
+    # print(results)
     return fr()(format_video(data, results))
 
 @get('/video/<vid>/<filename>')
@@ -858,4 +871,4 @@ def annotations():
 app = application = bottle.default_app()
 
 if __name__ == '__main__':
-    bottle.run(host='0.0.0.0', port=8080, debug=True)
+    bottle.run(host='0.0.0.0', port=8080, debug=True, server="gevent")

@@ -140,6 +140,8 @@ def framefilepath(idx):
     global eyesea_api_infiles
     return eyesea_api_infiles[idx]    
 
+clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+
 # return next image as numpy array
 # if no more images, returns empty array
 def get_frame():
@@ -154,6 +156,7 @@ def get_frame():
     if eyesea_api_nextf < eyesea_api_nframes:
         imfile = eyesea_api_infiles[eyesea_api_nextf]
         img = cv2.imread(imfile,-1)
+        img = cv2.cvtColor(clahe.apply(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)), cv2.COLOR_GRAY2BGR)
         # store size for later
         eyesea_api_shapes.append(img.shape) 
         eyesea_api_nextf += 1
@@ -228,7 +231,7 @@ def save_results():
 
     with open(outfile,'w') as f:
         f.write("{") # annotations
-        f.write(" \"source\": \"" + eyesea_api_indir + "\",\n")
+        f.write(" \"source\": \"" + eyesea_api_indir.encode('unicode-escape').decode() + "\",\n")
         f.write(" \"user\": \"" + eyesea_api_alg + "\",\n")
         f.write(" \"last_edit\": \"" + ts.ctime() + "\",\n")
         f.write(" \"frames\": [\n") # frameseyesea_api_results

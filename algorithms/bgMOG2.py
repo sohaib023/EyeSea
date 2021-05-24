@@ -74,7 +74,7 @@ def print_params(mog2):
 # main algorithm
 def bgMOG2():
     args = api.get_args('bgMOG2.json')
-    
+
     if args.verbose: print("Welcome to bgMOG2!")
 
     # kernel used for morphological ops on fg mask
@@ -119,18 +119,18 @@ def bgMOG2():
     '''
 
     if args.verbose: print('initializting background...')
-    n = min(100, api.nframes())
-    hist = np.zeros((width*height,n),dtype=np.float32)
+    n = min(10, api.nframes())
+    hist = np.zeros((width*height,n),dtype=np.uint8)
 
     for i in range(n):
         if args.verbose: print(i)
         # convert to grayscale, if frame is color image
         if depth > 1: 
-            frame = np.float32(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)) / 255.0
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         hist[:,i] = frame.flatten()
         frame, idx = api.get_frame()
 
-    bg_init = np.mean(hist,axis=1,dtype=np.float32).reshape(width,height)
+    bg_init = np.mean(hist,axis=1,dtype=np.float64).reshape(width,height).astype(np.uint8)
     #bg_std = np.std(hist,axis=1,dtype=np.float64)
 
     if args.verbose: 
@@ -161,11 +161,11 @@ def bgMOG2():
     while(frame != []):
         # convert to grayscale, if frame is color image
         if depth > 1: 
-            frame = np.float32(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)) / 255.0
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # fgmask is single channel 2D array of type uint8
         # TODO: adjust learning rate based on number of frames
-        fgmask = fgbg.apply(frame, learningRate=0.001)
+        fgmask = fgbg.apply(frame, learningRate=0.05)
         # apply morphological open to remove small isolated groups of fg pixels
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
         cnts = cv2.findContours(fgmask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
@@ -185,7 +185,11 @@ def bgMOG2():
                 cv2.rectangle(frame,(int(x),int(y)),(int(x+w),int(y+h)),(0,0,255),2)
         if args.verbose: 
             dst = cv2.resize(frame, None, fx = 0.5, fy = 0.5, interpolation = cv2.INTER_AREA)
+            dst2 = cv2.resize(fgmask, None, fx = 0.5, fy = 0.5, interpolation = cv2.INTER_AREA)
+            dst3 = cv2.resize(fgbg.getBackgroundImage(), None, fx = 0.5, fy = 0.5, interpolation = cv2.INTER_AREA)
             cv2.imshow('frame',dst)
+            cv2.imshow('mask',dst2)
+            cv2.imshow('bg',dst3)
             k = cv2.waitKey(500) & 0xff
             if k == 27:
                 break

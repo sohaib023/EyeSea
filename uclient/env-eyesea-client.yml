@@ -2,5 +2,5 @@ name: eyesea-client
 channels:
   - conda-forge
 dependencies:
-  - nodejs
+  - nodejs==10.13.0
  

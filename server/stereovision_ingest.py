@@ -40,6 +40,7 @@ import sys
 import time
 import subprocess
 import shutil
+import traceback
 
 from eyesea_db import *
 
@@ -64,17 +65,45 @@ def parse_camera_settings(timedir):
 # ffmpeg tuning:
 # https://trac.ffmpeg.org/wiki/Encode/H.264
 def make_movie(imgpath,fps,outfile):
-    (
-        ffmpeg
-        .input(os.path.join(imgpath,'*.jpg'), pattern_type='glob', framerate=fps)
-        .output(outfile 
-            ,vcodec='libx264'
-            ,crf=17
-            ,pix_fmt='yuv420p'
-            )
-        .overwrite_output()
-        .run()
-    )
+    filenames = sorted(glob.glob(os.path.join(imgpath,'*.jpg')))
+    for i, filename in enumerate(filenames):
+        shutil.move(filename, os.path.join(imgpath, '{0:09}'.format(i) + ".jpg"))
+
+    try:
+        (
+            ffmpeg
+            .input(os.path.join(imgpath,'%09d.jpg'), pattern_type='sequence', framerate=fps)
+            .output(outfile 
+                ,vcodec='libx264'
+                ,crf=17
+                ,pix_fmt='yuv420p'
+                )
+            .overwrite_output()
+            .run()
+        )
+    except Exception as e:
+        print(exception_to_string(e))
+        print("Unexpected error:", sys.exc_info()[0])
+    finally:
+        success = False
+        while not success:
+            try:
+                for i, filename in enumerate(filenames):
+                    try:
+                        shutil.move(os.path.join(imgpath, '{0:09}'.format(i) + ".jpg"), filename)
+                    except FileNotFoundError as e:
+                        continue
+                success = True
+            except Exception as e:
+                print(exception_to_string(e))
+                print("Unexpected error:", sys.exc_info()[0])
+                success = False
+
+def exception_to_string(excp):
+   stack = traceback.extract_stack()[:-3] + traceback.extract_tb(excp.__traceback__)  # add limit=?? 
+   pretty = traceback.format_list(stack)
+   return ''.join(pretty) + '\n  {} {}'.format(excp.__class__,excp)
+
 # make_movie()
 
 # TODO: if database already exists, then don't create tables
@@ -153,7 +182,7 @@ if __name__ == "__main__":
     algdir = os.path.abspath(os.path.expandvars(settings['algorithms']))
     if not os.path.isdir(algdir):
         print('invalid algorithm dir: ' + algdir)
-        return
+        exit(0)
     print('Algorithm dir is ' + algdir)
 
     # get analysis method to use
