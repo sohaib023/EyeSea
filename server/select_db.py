@@ -48,11 +48,14 @@ if __name__ == '__main__':
 
         if selection == len(datasets):
             path = input("Enter the path to Stereovision dataset (containing folders of format yyyy_mm_dd): ") 
+            path = path.replace("\"", "")
+            path = '\\'.join([token for token in path.split('\\') if token != ""])
+
             print("\n")
             print("\t\t********************************")
             print("\t\t** Ingesting Sterevision data **")
             print("\t\t********************************")
-            os.system("python stereovision_ingest.py -d {}".format(path))
+            os.system("python stereovision_ingest.py -d \"{}\"".format(path))
             print("\t\t******************************")
             print("\t\t**** Ingestion Completed *****")
             print("\t\t******************************")

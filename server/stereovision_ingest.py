@@ -202,6 +202,11 @@ if __name__ == "__main__":
 
     # get list of day directories
     daydirs = glob.glob(os.path.join(rootdir,'????_??_??'))
+    if len(daydirs) == 0:
+        timedirs = glob.glob(os.path.join(rootdir,'????_??_?? ??_??_??'))
+        if len(timedirs) > 0:
+            daydirs = [rootdir]
+            
     print("Found {} days".format(len(daydirs)))
     for day in daydirs:
         print(day)

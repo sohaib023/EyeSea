@@ -156,7 +156,14 @@ def get_frame():
     if eyesea_api_nextf < eyesea_api_nframes:
         imfile = eyesea_api_infiles[eyesea_api_nextf]
         img = cv2.imread(imfile,-1)
-        img = cv2.cvtColor(clahe.apply(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)), cv2.COLOR_GRAY2BGR)
+        channels = img.shape[-1] if len(img.shape)==3 else 1
+        if channels > 1:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        img = clahe.apply(img)
+
+        if channels > 1:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         # store size for later
         eyesea_api_shapes.append(img.shape) 
         eyesea_api_nextf += 1
