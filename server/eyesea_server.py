@@ -129,8 +129,8 @@ def get_or_update_analysis(a):
                 task['error'].flush()
                 os.fsync(task['error'].fileno())
                 task['error'].seek(0)
-                data['results'] = task['error'].read()
-                print(data['results'])
+                # data['results'] = task['error'].read()
+                print(task['error'].read())
             else:
                 with open(task['output']) as f:
                     results = json.loads(f.read())['frames']
@@ -150,7 +150,13 @@ def get_or_update_analysis(a):
             except OSError:
                 pass
 
-    results = json.loads(a['results'] if a['results'] else '{}')
+    try:
+        results = json.loads(a['results'] if a['results'] else '{}')
+    except Exception as e:
+        print(exception_to_string(e))
+        print(a['results'])
+        results = []
+
     return {
         'id': a['aid'],
         'status': a['status'],
@@ -202,7 +208,7 @@ def queue_analysis(index, vid, method, procargs=None):
             method = analysis_method.select(analysis_method).where(
                 analysis_method.mid == method).dicts().get()
         except analysis_method.DoesNotExist:
-            return {'error': 'Invalid method ID specified.', details: str(method)}
+            return {'error': 'Invalid method ID specified.', 'details': str(method)}
 
     try:
         base_args = json.loads(method['parameters'])
