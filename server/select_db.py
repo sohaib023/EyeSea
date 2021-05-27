@@ -48,7 +48,11 @@ if __name__ == '__main__':
 
         if selection == len(datasets):
             path = input("Enter the path to Stereovision dataset (containing folders of format yyyy_mm_dd): ") 
-            path = path.replace("\"", "")
+            # path = path.replace("\"", "")
+            if path[0] == "\"":
+                path = path[1:]
+            if path[-1] == "\"":
+                path = path[:-1]
             path = '\\'.join([token for token in path.split('\\') if token != ""])
 
             print("\n")
