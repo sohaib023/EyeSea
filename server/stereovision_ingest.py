@@ -36,6 +36,7 @@ Gamma: 0.80
 import os
 import glob
 import ffmpeg
+import csv
 import sys
 import time
 import subprocess
@@ -179,6 +180,14 @@ if __name__ == "__main__":
     if not os.path.isdir(cache):
         os.makedirs(cache)
 
+    voverlay_dir = os.path.abspath(os.path.expandvars(settings['video_overlay_storage']))
+    if not os.path.isdir(voverlay_dir):
+        os.makedirs(voverlay_dir)
+
+    csv_dir = os.path.abspath(os.path.expandvars(settings['csv_storage']))
+    if not os.path.isdir(csv_dir):
+        os.makedirs(csv_dir)
+
     algdir = os.path.abspath(os.path.expandvars(settings['algorithms']))
     if not os.path.isdir(algdir):
         print('invalid algorithm dir: ' + algdir)
@@ -239,8 +248,12 @@ if __name__ == "__main__":
                 print("Camera {:d} has {:d} images".format(cam, len(imgs)))
                 if len(imgs) > 0:
                     vidfile = os.path.join(vdir, os.path.basename(t) + '_Cam{:d}.mp4'.format(cam))
-                    if os.path.exists(vidfile) and not force: continue
-                    if not os.path.exists(vidfile):
+
+                    csv_filename = os.path.splitext(os.path.basename(vidfile))[0] + '.csv'
+                    csv_filepath = os.path.join(csv_dir, csv_filename)
+
+                    if os.path.exists(csv_filepath) and not force: continue
+                    if not os.path.exists(csv_filepath):
                         print("Making movie {}".format(vidfile))
                         make_movie(imgpath,fps[cam-1],vidfile)
                     thumbfile = os.path.join(cache, os.path.splitext(os.path.basename(vidfile))[0] + '.jpg')
@@ -277,12 +290,58 @@ if __name__ == "__main__":
             vid = data['vid']
             results = ''
             status = 'FAILED'
+
+            ffmpeg_task = ffmpeg.input(vf)
+
+            csv_filename = os.path.splitext(os.path.basename(vf))[0] + '.csv'
+            csv_filepath = os.path.join(csv_dir, csv_filename)
+
+            detections_file = open(csv_filepath, newline='', mode='w')
+            csv_writer = csv.writer(detections_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            csv_writer.writerow(['time', 'x', 'y', 'w', 'h', 'method'])
+            
             if p.returncode == 0:
                 print('    got results')
                 status = 'FINISHED'
                 with open(res) as f:
                     output = json.loads(f.read())['frames']
                     results = json.dumps(output, separators=(',', ':'))
+                
+                sorted_output = sorted(output, key=lambda x: x["frameindex"])
+
+                for out_row in sorted_output:
+                    frame_num  = out_row["frameindex"]
+                    detections = out_row['detections']
+
+                    for det in detections:
+                        x1, y1, x2, y2 = det["x1"], det["y1"], det["x2"], det["y2"]
+                        ffmpeg_task = ffmpeg_task.drawbox(
+                            x1, 
+                            y1, 
+                            x2 - x1, 
+                            y2 - y1, 
+                            "red", 
+                            thickness=1, 
+                            enable='between(n,{},{})'.format(frame_num, frame_num)
+                        )
+
+                        timestamp = time.strftime('%H:%M:%S', time.gmtime(frame_num/fr))
+                        timestamp += "{:.6f}".format(frame_num/fr % 1)[1:]
+                        csv_writer.writerow([timestamp, x1, y1, x2 - x1, y2 - y1, algname])
+            detections_file.close()
+            (
+                ffmpeg_task
+                    .output(
+                        os.path.join(voverlay_dir, os.path.basename(vf)), 
+                        vcodec='libx264', 
+                        crf=17, 
+                        pix_fmt="yuv420p"
+                    )
+                    .overwrite_output()
+                    .run()
+            )
+
             data = analysis.select().where(
                 analysis.aid==analysis.insert(
                     mid = mid
