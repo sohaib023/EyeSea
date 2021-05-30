@@ -3,7 +3,7 @@
     "temporary_storage": "..\\storage\\.tmp",
     "video_storage": "..\\storage\\videos",
     "video_overlay_storage": "..\\storage\\videos_overlayed",
-    "csv_storage": "..\\storage\\video_detections",
+    "csv_storage": "..\\storage\\detections",
     "database_storage": "..\\storage\\databases",
     "algorithms": "..\\algorithms",
     "database": "stereovision-2020_05_05.db",
