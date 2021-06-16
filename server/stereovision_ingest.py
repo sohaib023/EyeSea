@@ -34,6 +34,7 @@ Gamma: 0.80
 '''
 
 import os
+import cv2
 import glob
 import ffmpeg
 import csv
@@ -67,13 +68,20 @@ def parse_camera_settings(timedir):
 # https://trac.ffmpeg.org/wiki/Encode/H.264
 def make_movie(imgpath,fps,outfile):
     filenames = sorted(glob.glob(os.path.join(imgpath,'*.jpg')))
-    for i, filename in enumerate(filenames):
-        shutil.move(filename, os.path.join(imgpath, '{0:09}'.format(i) + ".jpg"))
 
+    spf = 1 / fps
+
+    frames_filename = outfile + '-frames.txt'
     try:
+        with open(frames_filename, 'w') as f:
+            for filename in filenames:
+                f.write("file '{}'\n".format(filename))
+                f.write("duration {}\n".format(spf))
+            if len(filenames) > 0:
+                f.write("file '{}'\n".format(filenames[-1]))
         (
             ffmpeg
-            .input(os.path.join(imgpath,'%09d.jpg'), pattern_type='sequence', framerate=fps)
+            .input(frames_filename, format='concat', safe=0, r=fps)
             .output(outfile 
                 ,vcodec='libx264'
                 ,crf=17
@@ -86,19 +94,8 @@ def make_movie(imgpath,fps,outfile):
         print(exception_to_string(e))
         print("Unexpected error:", sys.exc_info()[0])
     finally:
-        success = False
-        while not success:
-            try:
-                for i, filename in enumerate(filenames):
-                    try:
-                        shutil.move(os.path.join(imgpath, '{0:09}'.format(i) + ".jpg"), filename)
-                    except FileNotFoundError as e:
-                        continue
-                success = True
-            except Exception as e:
-                print(exception_to_string(e))
-                print("Unexpected error:", sys.exc_info()[0])
-                success = False
+        if os.path.exists(frames_filename):
+            os.remove(frames_filename)
 
 def exception_to_string(excp):
    stack = traceback.extract_stack()[:-3] + traceback.extract_tb(excp.__traceback__)  # add limit=?? 
@@ -235,6 +232,7 @@ if __name__ == "__main__":
         video_dur = []
         analysis_proc = []
         analysis_results = []
+        image_paths = []
 
         for t in timedirs:
             print(t)
@@ -271,9 +269,10 @@ if __name__ == "__main__":
                     p = subprocess.run(args)
                     analysis_proc.append(p)
                     analysis_results.append(outfile)
+                    image_paths.append(imgpath)
 
         # ingest data into EyeSea database
-        for vf,fr,dur,p,res in zip(video_files,video_fps,video_dur,analysis_proc,analysis_results):
+        for vf,fr,dur,p,res,imgpath in zip(video_files,video_fps,video_dur,analysis_proc,analysis_results, image_paths):
             print("Ingesting {} into EyeSea database".format(os.path.basename(vf)))
             data = video.select().where(
                 video.vid==video.insert(
@@ -291,8 +290,6 @@ if __name__ == "__main__":
             results = ''
             status = 'FAILED'
 
-            ffmpeg_task = ffmpeg.input(vf)
-
             csv_filename = os.path.splitext(os.path.basename(vf))[0] + '.csv'
             csv_filepath = os.path.join(csv_dir, csv_filename)
 
@@ -301,6 +298,8 @@ if __name__ == "__main__":
 
             csv_writer.writerow(['time', 'x', 'y', 'w', 'h', 'method'])
             
+            os.makedirs(os.path.join(tmp, os.path.basename(vf)), exist_ok=True)
+
             if p.returncode == 0:
                 print('    got results')
                 status = 'FINISHED'
@@ -309,38 +308,31 @@ if __name__ == "__main__":
                     results = json.dumps(output, separators=(',', ':'))
                 
                 sorted_output = sorted(output, key=lambda x: x["frameindex"])
+                filenames = sorted(glob.glob(os.path.join(imgpath,'*.jpg')))
 
                 for out_row in sorted_output:
                     frame_num  = out_row["frameindex"]
                     detections = out_row['detections']
 
+                    image = cv2.imread(filenames[frame_num])
                     for det in detections:
                         x1, y1, x2, y2 = det["x1"], det["y1"], det["x2"], det["y2"]
-                        ffmpeg_task = ffmpeg_task.drawbox(
-                            x1, 
-                            y1, 
-                            x2 - x1, 
-                            y2 - y1, 
-                            "red", 
-                            thickness=1, 
-                            enable='between(n,{},{})'.format(frame_num, frame_num)
-                        )
+
+                        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
 
                         timestamp = time.strftime('%H:%M:%S', time.gmtime(frame_num/fr))
                         timestamp += "{:.6f}".format(frame_num/fr % 1)[1:]
                         csv_writer.writerow([timestamp, x1, y1, x2 - x1, y2 - y1, algname])
+                    cv2.imwrite(os.path.join(tmp, os.path.basename(vf), os.path.basename(filenames[frame_num])), image)
+
             detections_file.close()
-            (
-                ffmpeg_task
-                    .output(
-                        os.path.join(voverlay_dir, os.path.basename(vf)), 
-                        vcodec='libx264', 
-                        crf=17, 
-                        pix_fmt="yuv420p"
-                    )
-                    .overwrite_output()
-                    .run()
+            
+            make_movie(
+                os.path.join(tmp, os.path.basename(vf)),
+                fr,
+                os.path.join(voverlay_dir, os.path.basename(vf))
             )
+            shutil.rmtree(os.path.join(tmp, os.path.basename(vf)))
 
             data = analysis.select().where(
                 analysis.aid==analysis.insert(

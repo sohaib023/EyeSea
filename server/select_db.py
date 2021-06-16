@@ -21,8 +21,15 @@ def exception_to_string(excp):
 
 def process_path_input(path):
     # path = path.replace("\"", "")
+    if len(path) == 0:
+        return path
+        
     if path[0] == "\"":
         path = path[1:]
+
+    if len(path) == 0:
+        return path
+
     if path[-1] == "\"":
         path = path[:-1]
     path = '\\'.join([token for token in path.split('\\') if token != ""])
